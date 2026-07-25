@@ -1,0 +1,6 @@
+aws_region     = "us-east-1"
+aws_profile    = "default"
+cluster_name   = "techchallenge-cluster"
+namespace_name = "garage"
+db_name        = "postgres"
+db_username    = "postgres"
