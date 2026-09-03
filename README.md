@@ -76,9 +76,15 @@ graph TD
 
 ## ⚙️ 4. Passos para Execução e Deploy
 
+> [!CAUTION]
+> **DIRETRIZ MANDATÓRIA DE DEVSECOPS: NUNCA MAPEAR DADOS SENSÍVEIS NO CÓDIGO FONTE**
+> É **estritamente proibido** comitar senhas mestras de banco de dados (`db_password`), tokens ou credenciais da AWS em arquivos `.tf`, `.tfvars`, `.yaml` ou scripts.
+> Todas as credenciais de banco de dados e chaves da AWS **devem ser configuradas exclusivamente nos Segredos da Pipeline (GitHub Actions Secrets)** e no **AWS Secrets Manager**, sendo injetadas de forma dinâmica e segura.
+
 ### 4.1. Pré-Requisito Obrigatório
 > [!IMPORTANT]
 > O **Passo 1 (`15-soat-tech-challenge-iac-k8s`)** deve estar aplicado. Este repositório descobre automaticamente a VPC `techchallenge-cluster-vpc` e o cluster Kubernetes em execução.
+
 
 ### 4.2. Comandos do Terraform
 Com as credenciais ativas do AWS Learner Lab no terminal:
