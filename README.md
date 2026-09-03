@@ -1,109 +1,153 @@
-# 🐘 Passo 2: Banco de Dados RDS & Observabilidade (`15-soat-tech-challenge-iac-db`)
+# 🐘 Banco de Dados RDS & Observabilidade (`15-soat-tech-challenge-iac-db`)
 
-Este repositório é o **segundo passo** do provisionamento da infraestrutura na AWS. Ele provisiona o banco de dados relacional **AWS RDS PostgreSQL** integrado à VPC privada do EKS e implanta a stack de **Observabilidade** (Prometheus, Grafana, Loki e Jaeger) dentro do cluster.
+Repositório de **Infraestrutura como Código (IaC)** responsável pelo provisionamento do banco de dados relacional gerenciado **AWS RDS PostgreSQL** (com gerenciamento de segredos via **AWS Secrets Manager**) e implantação da stack completa de **Observabilidade e Telemetria** no Kubernetes.
 
 ---
 
-## 📌 Pré-Requisito Obrigatório
+## 🎯 1. Descrição do Propósito
 
+Este repositório atende a dois pilares fundamentais da solução:
+* **Persistência de Dados Confiável e Segura**: Criação de instância de banco de dados PostgreSQL na versão estável **15.13** totalmente isolada nas subnets privadas da VPC do EKS, com credenciais rotativas gerenciadas pelo AWS Secrets Manager e liberação de porta exclusiva (5432) para a rede interna.
+* **Observabilidade e Monitoramento Centralizado**: Implantação e orquestração dos quatro pilares da observabilidade moderna dentro do cluster Kubernetes:
+  * **Métricas de Cluster e Pods**: Coletadas pelo **Prometheus** e **Kube-State-Metrics**.
+  * **Logs Agregados**: Ingestão e pesquisa de logs estruturados de contêiner via **Grafana Loki**.
+  * **Rastreamento Distribuído (Distributed Tracing)**: Rastreamento fim a fim de transações HTTP via **Jaeger** com protocolo OpenTelemetry (OTLP).
+  * **Visualização Unificada**: Dashboards pré-provisionados no **Grafana** com métricas de sistema, HPA, logs e traces integrados.
+
+---
+
+## 💻 2. Tecnologias Utilizadas
+
+* **Infraestrutura como Código**: Terraform 1.6+ (com HCL e descoberta dinâmica via Data Sources).
+* **Banco de Dados Gerenciado**: Amazon Relational Database Service (AWS RDS PostgreSQL 15.13, classe `db.t3.micro`, armazenamento 20 GB `gp2`).
+* **Gerenciamento de Segredos**: AWS Secrets Manager (`garage-db-credentials`).
+* **Rede & Segurança do Banco**: AWS DB Subnet Group privado e Security Groups restritos ao CIDR da VPC (`10.0.0.0/16`).
+* **Métricas**: Prometheus v2 e Kube-State-Metrics v2.
+* **Logs**: Grafana Loki.
+* **Distributed Tracing**: Jaeger All-In-One com receptores OTLP (portas 4317 gRPC e 4318 HTTP).
+* **Visualização**: Grafana com dashboards automáticos provisionados via ConfigMaps do Kubernetes.
+
+---
+
+## 🏛️ 3. Diagrama da Arquitetura do Repositório
+
+```mermaid
+graph TD
+    subgraph EKSVPC [AWS VPC do Cluster 10.0.0.0/16]
+        subgraph PrivateSubnets [Subnets Privadas de Dados]
+            DBSubnetGroup[AWS DB Subnet Group]
+            RDS[(AWS RDS PostgreSQL 15.13)]
+            SecretsManager[AWS Secrets Manager: garage-db-credentials]
+            
+            DBSubnetGroup --> RDS
+            SecretsManager -.->|Gera e armazena credenciais| RDS
+        end
+
+        subgraph EKSWorkloads [Cluster EKS - Namespace: garage]
+            App[api-garage Pods]
+            Keycloak[Keycloak Pods]
+            
+            App -->|Porta 5432 JDBC| RDS
+            Keycloak -->|Porta 5432 JDBC| RDS
+            
+            subgraph ObservabilityStack [Stack de Observabilidade]
+                KSM[Kube-State-Metrics]
+                Prometheus[Prometheus NodePort: 30909]
+                Loki[Loki NodePort: 30310]
+                Jaeger[Jaeger OTLP NodePort: 31686]
+                Grafana[Grafana Dashboard NodePort: 30300]
+                
+                KSM -->|Métricas do K8s| Prometheus
+                App -.->|Scrape /actuator/prometheus| Prometheus
+                App -.->|Logs stdout| Loki
+                App -.->|Traces OTLP :4317| Jaeger
+                
+                Prometheus -->|Datasource| Grafana
+                Loki -->|Datasource| Grafana
+                Jaeger -->|Datasource| Grafana
+            end
+        end
+    end
+
+    User([Engenheiro / Administrador]) -->|Port-forward :3000| Grafana
+```
+
+---
+
+## ⚙️ 4. Passos para Execução e Deploy
+
+### 4.1. Pré-Requisito Obrigatório
 > [!IMPORTANT]
-> O **Passo 1 (`15-soat-tech-challenge-iac-k8s`)** DEVE ter sido concluído com sucesso antes de rodar este projeto!
-> 
-> Este repositório utiliza **Data Sources** do Terraform para descobrir automaticamente:
-> - A VPC do EKS (`techchallenge-cluster-vpc`)
-> - As subnets privadas com tag `kubernetes.io/role/internal-elb = 1`
-> - O cluster EKS para autenticação do provider Kubernetes
+> O **Passo 1 (`15-soat-tech-challenge-iac-k8s`)** deve estar aplicado. Este repositório descobre automaticamente a VPC `techchallenge-cluster-vpc` e o cluster Kubernetes em execução.
 
----
-
-## 🏛️ Arquitetura do Banco e Telemetria
-
-```
-                                 ┌───────────────────────────────────┐
-                                 │   AWS RDS PostgreSQL (15.13)      │
-                                 │   - Subnet Group Privado          │
-                                 │   - Security Group (Porta 5432)   │
-                                 │   - AWS Secrets Manager           │
-                                 └──────────────▲────────────────────┘
-                                                │ (Conexão Privada na VPC)
- ┌──────────────────────────────────────────────┴─────────────────────────────────┐
- │                            Cluster AWS EKS                                     │
- │                                                                                │
- │  ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐  │
- │  │ Keycloak (Auth Pod)  │  │ api-garage (App Pod) │  │ Prometheus (Métricas)│  │
- │  └──────────────────────┘  └──────────────────────┘  └──────────────────────┘  │
- │  ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐  │
- │  │ Grafana (Dashboards) │  │ Loki (Logs)          │  │ Jaeger (Tracing)     │  │
- │  └──────────────────────┘  └──────────────────────┘  └──────────────────────┘  │
- └────────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## ⚙️ Execução Passo a Passo do Terraform
-
-Certifique-se de estar com as credenciais da sessão ativa no seu terminal (mesmas credenciais do Passo 1).
-
-Dentro da pasta `15-soat-tech-challenge-iac-db`:
+### 4.2. Comandos do Terraform
+Com as credenciais ativas do AWS Learner Lab no terminal:
 
 ```bash
-# 1. Inicializar os módulos e providers
+# 1. Inicializar providers
 terraform init
 
-# 2. Validar a sintaxe
+# 2. Validar sintaxe
 terraform validate
 
-# 3. Visualizar o plano de execução
+# 3. Planejar as alterações
 terraform plan
 
-# 4. Aplicar e provisionar na AWS
+# 4. Provisionar na AWS (leva cerca de 4 a 6 minutos para criação do RDS)
 terraform apply -auto-approve
 ```
 
-> [!NOTE]
-> A criação da instância do RDS PostgreSQL na AWS leva em média de **4 a 6 minutos**.
+### 4.3. Como Acessar a Stack de Observabilidade Localmente
+Como os serviços estão em subnets privadas do cluster, utilize o comando `port-forward` do `kubectl` para acessá-los no seu navegador:
+
+```bash
+# Acessar o Grafana (Login anônimo Admin pré-configurado)
+kubectl -n garage port-forward svc/grafana 3000:3000
+# Acesse no navegador: http://localhost:3000
+
+# Acessar o Prometheus Web UI
+kubectl -n garage port-forward svc/prometheus 9090:9090
+# Acesse no navegador: http://localhost:9090
+
+# Acessar a interface de Tracing do Jaeger
+kubectl -n garage port-forward svc/jaeger 16686:16686
+# Acesse no navegador: http://localhost:16686
+```
 
 ---
 
-## 📊 Módulos e Recursos Provisionados
+## 📑 5. Link para o Swagger e Postman das APIs
 
-| Módulo | Recursos Criados |
-| :--- | :--- |
-| **`modules/rds`** | Instância **AWS RDS PostgreSQL** (versão suportada `15.13`, classe `db.t3.micro`, 20 GB `gp2`), DB Subnet Group vinculado às subnets privadas do EKS, Security Group liberando tráfego interno na porta 5432 e credenciais criptografadas no **AWS Secrets Manager** (`garage-db-credentials`). |
-| **`modules/observability`** | Stack completa no Kubernetes: **Kube State Metrics**, **Loki** (logs centralizados), **Jaeger** (Distributed Tracing OTLP), **Prometheus** (raspagem de métricas de pods e nós) e **Grafana** com 4 dashboards pré-provisionados. |
+As APIs que consomem este banco de dados e expõem métricas para o Prometheus estão mapeadas e documentadas nos seguintes endereços:
 
----
+### 🌐 Endpoints de Métricas e Documentação:
+* **Métricas da Aplicação para Prometheus**:
+  ```
+  https://igqc9vtfx9.execute-api.us-east-1.amazonaws.com/api/actuator/prometheus
+  ```
+* **Swagger UI (Consumo das APIs com persistência no RDS)**:
+  ```
+  https://igqc9vtfx9.execute-api.us-east-1.amazonaws.com/api/swagger-ui/index.html
+  ```
 
-## 🔍 Como Acessar a Observabilidade (Grafana & Prometheus)
+### 📬 Exemplo de Requisição no Postman (Verificação de Saúde do Banco):
 
-Os serviços de observabilidade são expostos no cluster Kubernetes via `NodePort`:
+```bash
+curl --location 'https://igqc9vtfx9.execute-api.us-east-1.amazonaws.com/api/actuator/health'
+```
 
-| Serviço | Porta NodePort | Comando para Acesso Local (Port-Forward) |
-| :--- | :---: | :--- |
-| **Grafana** | `30300` | `kubectl -n garage port-forward svc/grafana 3000:3000` |
-| **Prometheus** | `30909` | `kubectl -n garage port-forward svc/prometheus 9090:9090` |
-| **Jaeger UI** | `31686` | `kubectl -n garage port-forward svc/jaeger 16686:16686` |
-| **Loki** | `30310` | `kubectl -n garage port-forward svc/loki 3100:3100` |
-
-* **Acesso ao Grafana no Navegador**: Acesse `http://localhost:3000` (Login anônimo de administrador já ativado).
-* **Dashboards Disponíveis**:
-  * Métricas de Aplicação e CPU/Memória
-  * HPA Auto Scaling
-  * Logs agregados via Loki
-  * Traces distribuídos via Jaeger
-
----
-
-## 🎯 O que esperar após o Passo 2:
-
-Assim que o RDS PostgreSQL estiver com status `Available`:
-1. O pod do **Keycloak** (`kubectl -n garage get pods -l app=keycloak`) conseguirá conectar no banco de dados e passará para o status **`Running` (1/1)**.
-2. A base de dados estará pronta para receber o tráfego da API e da Lambda.
-
----
-
-## ⚠️ Cuidados com o AWS Learner Lab
-
-> [!WARNING]
-> - Quando a sessão do Learner Lab expira (timer 0:00), a AWS **NÃO desliga instâncias RDS**. Elas continuarão consumindo créditos do seu saldo de US$ 50/100.
-> - Ao final dos testes do dia, execute `terraform destroy -auto-approve` para encerrar o banco e preservar os créditos do laboratório.
+**Resposta esperada confirmando conexão com o RDS PostgreSQL**:
+```json
+{
+  "status": "UP",
+  "components": {
+    "db": {
+      "status": "UP",
+      "details": {
+        "database": "PostgreSQL",
+        "validationQuery": "isValid()"
+      }
+    }
+  }
+}
+```
