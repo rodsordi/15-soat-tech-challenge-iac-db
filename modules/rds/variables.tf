@@ -21,3 +21,16 @@ variable "vpc_cidr" {
   description = "EKS VPC CIDR for Ingress"
   default     = "10.0.0.0/16"
 }
+
+variable "vpc_id" {
+  type        = string
+  description = "VPC ID where RDS should be deployed"
+  default     = null
+}
+
+variable "subnet_ids" {
+  type        = list(string)
+  description = "Subnet IDs where RDS DB Subnet Group will be created"
+  default     = []
+}
+

@@ -48,7 +48,10 @@ resource "kubernetes_cluster_role_binding" "kube_state_metrics" {
 }
 
 resource "kubernetes_deployment" "kube_state_metrics" {
+  wait_for_rollout = false
+
   metadata {
+
     name      = "kube-state-metrics"
     namespace = var.namespace_name
   }
@@ -97,7 +100,10 @@ resource "kubernetes_service" "kube_state_metrics" {
 }
 
 resource "kubernetes_deployment" "loki" {
+  wait_for_rollout = false
+
   metadata {
+
     name      = "loki"
     namespace = var.namespace_name
   }
@@ -150,7 +156,10 @@ resource "kubernetes_service" "loki" {
 }
 
 resource "kubernetes_deployment" "jaeger" {
+  wait_for_rollout = false
+
   metadata {
+
     name      = "jaeger"
     namespace = var.namespace_name
   }
@@ -242,7 +251,10 @@ resource "kubernetes_config_map" "prometheus_config" {
 }
 
 resource "kubernetes_deployment" "prometheus" {
+  wait_for_rollout = false
+
   metadata {
+
     name      = "prometheus"
     namespace = var.namespace_name
   }
@@ -341,7 +353,10 @@ resource "kubernetes_config_map" "grafana_dashboards_json" {
 }
 
 resource "kubernetes_deployment" "grafana" {
+  wait_for_rollout = false
+
   metadata {
+
     name      = "grafana"
     namespace = var.namespace_name
   }
