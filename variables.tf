@@ -10,12 +10,6 @@ variable "aws_profile" {
   default     = "default"
 }
 
-variable "db_password" {
-  type        = string
-  sensitive   = true
-  description = "Master password for AWS RDS PostgreSQL"
-  default     = "Postgres2026!"
-}
 
 variable "db_name" {
   type        = string

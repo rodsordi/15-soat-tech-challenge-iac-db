@@ -1,9 +1,7 @@
 data "aws_vpc" "eks_vpc" {
-  filter {
-    name   = "tag:Name"
-    values = ["${var.cluster_name}-vpc"]
-  }
+  id = data.aws_eks_cluster.cluster.vpc_config[0].vpc_id
 }
+
 
 data "aws_subnets" "private_subnets" {
   filter {

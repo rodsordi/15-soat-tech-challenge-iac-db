@@ -60,12 +60,12 @@ resource "aws_security_group" "rds_sg" {
 
 # --- RDS DB Instance ---
 resource "aws_db_instance" "postgres" {
-  identifier                          = "garage-postgres-db"
-  allocated_storage                   = 20
-  storage_type                        = "gp2"
-  engine                              = "postgres"
-  engine_version                      = "15.13"
-  instance_class                      = var.instance_class
+  identifier        = "garage-postgres-db"
+  allocated_storage = 20
+  storage_type      = "gp2"
+  engine            = "postgres"
+  engine_version    = "15.13"
+  instance_class    = var.instance_class
 
   db_name                             = var.db_name
   username                            = var.db_username
