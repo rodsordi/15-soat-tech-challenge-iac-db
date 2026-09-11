@@ -25,8 +25,3 @@ module "rds" {
   subnet_ids     = data.aws_subnets.private_subnets.ids
 }
 
-module "observability" {
-  source         = "./modules/observability"
-  namespace_name = var.namespace_name
-}
-

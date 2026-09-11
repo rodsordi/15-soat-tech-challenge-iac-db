@@ -29,12 +29,6 @@ variable "cluster_name" {
   default     = "techchallenge-cluster"
 }
 
-variable "namespace_name" {
-  type        = string
-  description = "Kubernetes namespace for observability"
-  default     = "garage"
-}
-
 variable "instance_class" {
   type        = string
   description = "RDS instance class"
